@@ -1,0 +1,14 @@
+```
+cat out.dat | while read line
+do
+echo $line
+done
+```
+
+```
+IFS=$'\n'
+for line in `cat out.dat`
+do
+echo $line
+done
+```
