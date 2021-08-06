@@ -9,15 +9,10 @@ services:
       - 8080:8080
     environment:
       - PORT=8080
+    working_dir:
+      /work
     volumes:
       - ./work:/work
+      - ./tools:/tools
       - ./server:/plotter
     command: tail -f /dev/null
-
-  client:
-    container_name: plotter-client
-    build: .
-    environment:
-      - PORT=8080
-    depends_on:
-      - server
