@@ -7,6 +7,7 @@ import datetime
 import random
 import websockets
 import os
+import json
 
 PORT = os.getenv("PORT")
 
@@ -18,8 +19,10 @@ async def handler(websocket, path):
 
 
 async def reciever(websocket, path):
-    async for message in websocket:
-        print(message)
+    with open("console.log", "a") as f:
+        async for message in websocket:
+            print(message, flush=True)
+            f.write(message + "\n")
 
 
 async def sender(websocket, path):
@@ -29,19 +32,8 @@ async def sender(websocket, path):
             await asyncio.sleep(0.01)
             for line in f:
                 try:
-                    if line in ("\n", "clear\n"):
-                        message = "clear"
-                    elif line.startswith("color"):
-                        message = line.strip()
-                    else:
-                        if "," in line:
-                            x, y, z, *_ = line.strip().split(",")
-                        else:
-                            x, y, z, *_ = line.strip().split()
-                        x = float(x)
-                        y = float(y)
-                        z = float(z)
-                        message = f"{x} {y} {z}"
+                    _ = json.loads(line)  # TODO jsonのパースのみチェックでいい？
+                    message = line
                 except Exception:
                     pass
                 else:

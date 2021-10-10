@@ -1,9 +1,13 @@
 import sys
 
+SCALE = 10
+
 x_list = []
 y_list = []
 z_list = []
 for i, line in enumerate(sys.stdin):
+    if i == 0:
+        continue
     try:
         if "," in line:
             x, y, z, *_ = line.strip().split(",")
@@ -29,4 +33,4 @@ for x, y, z in zip(x_list, y_list, z_list):
     x = (x - x_min) / (x_max - x_min)
     y = (y - y_min) / (y_max - y_min)
     z = (z - z_min) / (z_max - z_min)
-    print(x, y, z)
+    print(x * SCALE, y * SCALE, z * SCALE)
