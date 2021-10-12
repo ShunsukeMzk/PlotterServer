@@ -10,9 +10,7 @@ services:
     environment:
       - PORT=8080
     working_dir:
-      /work
+      /PlotterServer
     volumes:
-      - ./work:/work
-      - ./tools:/tools
-      - ./server:/plotter
+      - ./:/PlotterServer
     command: tail -f /dev/null
