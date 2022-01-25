@@ -7,18 +7,31 @@ import datetime
 import random
 import websockets
 import os
+import sys
 import json
+
 
 PORT = os.getenv("PORT")
 
+objects = {}
+connections = {}
+
+
 async def handler(websocket, path):
-    consumer_task = asyncio.ensure_future(reciever(websocket, path))
-    produser_task = asyncio.ensure_future(sender(websocket, path))
-    tasks = [consumer_task, produser_task]
-    await asyncio.wait(tasks, return_when=asyncio.ALL_COMPLETED)
+    consumer_task = asyncio.ensure_future(receiver(websocket, path))
+    producer_task = asyncio.ensure_future(sender(websocket, path))
+    tasks = [consumer_task, producer_task]
+
+    # TODO Refactoring
+    print(f"Connected: {websocket}, Path: {path}", file=sys.stderr)
+    connections[path] = websocket
+    print(f"Connections: {connections}", file=sys.stderr)
+    print(json.dumps(objects, indent=2), file=sys.stderr)
+
+    await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
 
 
-async def reciever(websocket, path):
+async def receiver(websocket, path):
     with open("console.log", "a") as f:
         async for message in websocket:
             print(message, flush=True)
@@ -32,12 +45,17 @@ async def sender(websocket, path):
             await asyncio.sleep(0.01)
             for line in f:
                 try:
-                    _ = json.loads(line)  # TODO jsonのパースのみチェックでいい？
+                    info = json.loads(line)  # TODO jsonのパースのみチェックでいい？
+                    objects[info["name"]] = info
+
                     message = line
-                except Exception:
-                    pass
-                else:
                     await websocket.send(message)
+                except json.decoder.JSONDecodeError:
+                    pass
+                except websockets.ConnectionClosed:
+                    print(f"Close Connection: ", connections["path"], file=sys.stderr)
+                    # with open("console.log", "a") as f:
+                    #     f.write(f"\n")
 
 
 start_server = websockets.serve(handler, "0.0.0.0", PORT)

@@ -5,7 +5,7 @@
     </head>
     <body>
         <script>
-            var ws = new WebSocket("ws://0.0.0.0:8080/"),
+            var ws = new WebSocket("ws://localhost:8080/name?param=1"),
                 messages = document.createElement('ul');
             ws.onmessage = function (event) {
                 var messages = document.getElementsByTagName('ul')[0],
