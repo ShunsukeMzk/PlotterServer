@@ -46,7 +46,7 @@ async def sender(websocket, path):
             for line in f:
                 try:
                     info = json.loads(line)  # TODO jsonのパースのみチェックでいい？
-                    objects[info["name"]] = info
+                    # objects[info["name"]] = info
 
                     message = line
                     await websocket.send(message)

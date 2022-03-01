@@ -2,3 +2,4 @@ websockets
 black
 pandas
 click
+pyyaml

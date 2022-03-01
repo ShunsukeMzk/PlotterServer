@@ -19,6 +19,7 @@ uri = "wss://ws.lightstream.bitflyer.com/json-rpc"
 product = "BTC_JPY"
 
 base = {"price": None, "time": None}
+y_position = {"camera": 0, "data": 0}
 
 base_time = datetime.now().timestamp()
 
@@ -60,11 +61,19 @@ async def management():
         if base["price"] is None:
             continue
 
+        dst = (y_position["data"] // 5) * -5
+        if y_position["camera"] < dst:
+            y_position["camera"] += 0.01
+        elif y_position["camera"] > dst:
+            y_position["camera"] -= 0.01
+        else:
+            pass
+
         distance = base_time - datetime.now().timestamp()
         translate_info = {
             "name": f"order",
             "type": "--",
-            "position": {"x": 0, "y": 0, "z": distance},
+            "position": {"x": 0, "y": y_position["camera"], "z": distance},
             "scale": {"x": 1, "y": 1, "z": 1}
         }
         print(json.dumps(translate_info))
@@ -153,6 +162,8 @@ async def order_book():
                 base["price"] = mid_price
 
             mid_price = adjust_price(mid_price)
+
+            y_position["data"] = mid_price
 
             if previous_mid_price and mid_price > previous_mid_price:
                 point_color = {"r": 1, "g": 1, "b": 1, "a": 1}
