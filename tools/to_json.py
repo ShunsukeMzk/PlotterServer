@@ -3,7 +3,9 @@ import json
 
 SIZE = 0.3
 
+last_index = 0
 for i, line in enumerate(sys.stdin):
+    last_index = i
     try:
         if "," in line:
             x, y, z, *_ = line.strip().split(",")
@@ -11,8 +13,8 @@ for i, line in enumerate(sys.stdin):
             x, y, z, *_ = line.strip().split()
         
         dic = {
-            "name": f"point-{i}",
-            "type": "Object/sphere",
+            "path": f"point/{i}",
+            "type": "Object/Sphere",
             "position": {
                 "x": float(x),
                 "y": float(y),
@@ -36,3 +38,12 @@ for i, line in enumerate(sys.stdin):
         print(line, e, file=sys.stderr)
         print(line)
 
+for i in range(last_index + 1):
+    if i == 0:
+        continue
+
+    dic = {
+        "path": f"point/{i-1}_{i}",
+        "type": "Object/Line",
+    }
+    print(json.dumps(dic))
