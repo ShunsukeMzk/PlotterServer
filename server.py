@@ -2,63 +2,165 @@
 
 # WS server that sends messages at random intervals
 
+import signal
 import asyncio
+import logging
 import datetime
 import random
 import websockets
 import os
 import sys
 import json
+import secrets
 
 
 PORT = os.getenv("PORT")
+INIT = os.getenv("INIT")
+LOG = os.getenv("LOG")
 
-objects = {}
-connections = {}
+log = open(LOG, "a")
+
+
+OBJECTS = dict()
+FUNCTIONS = dict()
+FIELDS = dict()
+
+players = dict()
+
+
+class Info:
+
+    @property
+    def fields(self):
+        return [v for v in vars(self) if getattr(self, v)]
+
+    def __init__(self, message: str):
+        self.type = ""
+        self.path = ""
+        self.target = ""
+        for k, v in json.loads(message).items():
+            setattr(self, k, v)
+
+    def overwrite(self, info):
+        for attr in info.fields:
+            value = getattr(info, attr)
+            if value:
+                setattr(self, attr, value)
+
+    def to_dict(self):
+        return {f: getattr(self, f) for f in self.fields if f != "from"}
+
+    def to_json(self):
+        return json.dumps(self.to_dict())
+
+
+def apply(message) -> bool:
+    try:
+        json.loads(message)
+        info = Info(message)
+
+        def _apply(_key, _objects_, _info):
+            if _key in _objects_:
+                _objects_[_key].overwrite(_info)
+            else:
+                _objects_[_key] = _info
+
+        if info.type.startswith("Object"):
+            key = info.path
+            _apply(key, OBJECTS, info)
+        elif info.type.startswith("Function"):
+            key = (info.target, info.type)
+            _apply(key, FUNCTIONS, info)
+        elif info.type.startswith("Field"):
+            key = info.type
+            _apply(key, FIELDS, info)
+        elif info.type.startswith("Action"):
+            pass  # TODO Exec Action
+        else:
+            pass
+    except json.decoder.JSONDecodeError:
+        print(f"Invalid JSON message: {message}", file=sys.stderr)
+        return False
+    except Exception as e:
+        print(f"Unexpected message: {message}, error: {e}", file=sys.stderr)
+        return False
+    else:
+        return True
+
+
+async def init(websocket, path):
+    # Initialize Objects
+    for info in OBJECTS.values():
+        await websocket.send(info.to_json() + "\n")
+    for info in FUNCTIONS.values():
+        await websocket.send(info.to_json() + "\n")
+    for info in FIELDS.values():
+        await websocket.send(info.to_json() + "\n")
+
+
+async def broadcast(message, name):
+    for _name in filter(lambda x: x != name, players):
+        ws = players[_name]
+        await ws.send(message)
 
 
 async def handler(websocket, path):
-    consumer_task = asyncio.ensure_future(receiver(websocket, path))
-    producer_task = asyncio.ensure_future(sender(websocket, path))
-    tasks = [consumer_task, producer_task]
+    print(f"Connected: {path}", file=sys.stderr)
+    name = path[1:]
+    players[name] = websocket
 
-    # TODO Refactoring
-    print(f"Connected: {websocket}, Path: {path}", file=sys.stderr)
-    connections[path] = websocket
-    print(f"Connections: {connections}", file=sys.stderr)
-    print(json.dumps(objects, indent=2), file=sys.stderr)
+    await init(websocket, path)
 
-    await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+    async def _close():
+        print(f"Connection Closed: {path}")
+        target = f"Player/{name}"
+        msg = json.dumps(
+            {
+                "type": "Action/Delete/Object",
+                "target": target,
+            }
+        )
+        if target in OBJECTS:
+            del OBJECTS[target]
+        await broadcast(msg, name)
 
-
-async def receiver(websocket, path):
-    with open("console.log", "a") as f:
+    try:
         async for message in websocket:
-            print(message, flush=True)
-            f.write(message + "\n")
+            if message == "Close":
+                await _close()
+                return
+            succeed = apply(message)
+            if succeed:
+                log.write(message + "\n")
+                await broadcast(message, name)
+    except websockets.ConnectionClosed:
+        await _close()
+    finally:
+        del players[name]
 
 
-async def sender(websocket, path):
-    with open("console.log") as f:
-        f.seek(0, 2)
-        while True:
-            await asyncio.sleep(0.01)
-            for line in f:
-                try:
-                    info = json.loads(line)  # TODO jsonのパースのみチェックでいい？
-                    # objects[info["name"]] = info
+async def main():
 
-                    message = line
-                    await websocket.send(message)
-                except json.decoder.JSONDecodeError:
-                    pass
-                except websockets.ConnectionClosed:
-                    print(f"Close Connection: ", connections["path"], file=sys.stderr)
-                    # with open("console.log", "a") as f:
-                    #     f.write(f"\n")
+    # Initialize Object Information
+    with open(INIT, "r") as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            apply(line)
+
+    loop = asyncio.get_running_loop()
+    stop = loop.create_future()
+    loop.add_signal_handler(signal.SIGTERM, stop.set_result, None)
+
+    port = int(os.environ.get("PORT", "8080"))
+    async with websockets.serve(handler, "0.0.0.0", port):
+        await stop
 
 
-start_server = websockets.serve(handler, "0.0.0.0", PORT)
-
-asyncio.get_event_loop().run_until_complete(start_server)
-asyncio.get_event_loop().run_forever()
+if __name__ == "__main__":
+    try:
+        print(f"-- Start Server --", file=sys.stderr)
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        print(f"-- Stop Server --", file=sys.stderr)
