@@ -351,8 +351,12 @@ label {
 
             sendButton.click(function(e) {
                 var msg = $('#sendMessage').val();
-                addMessage(msg, 'SENT');
-                ws.send(msg);
+                msg.split("\n").forEach(
+                    function (data) {
+                        addMessage(data, 'SENT');
+                        ws.send(data);
+                    }
+                )
 
                 saveHistory(msg);
             });
