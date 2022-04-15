@@ -133,6 +133,7 @@ async def handler(websocket, path):
             if succeed:
                 log.write(message + "\n")
                 await broadcast(message, name)
+                print("#", flush=True, end="")
     except websockets.ConnectionClosed:
         await _close()
     finally:
