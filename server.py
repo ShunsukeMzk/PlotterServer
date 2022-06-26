@@ -26,13 +26,14 @@ FUNCTIONS = dict()
 FIELDS = dict()
 
 players = dict()
+members = dict()
 
 
 class Info:
 
     @property
     def fields(self):
-        return [v for v in vars(self) if getattr(self, v)]
+        return [v for v in vars(self) if getattr(self, v) is not None]
 
     def __init__(self, message: str):
         self.type = ""
@@ -44,7 +45,7 @@ class Info:
     def overwrite(self, info):
         for attr in info.fields:
             value = getattr(info, attr)
-            if value:
+            if value is not None:
                 setattr(self, attr, value)
 
     def to_dict(self):
@@ -75,7 +76,8 @@ def apply(message) -> bool:
             key = info.type
             _apply(key, FIELDS, info)
         elif info.type.startswith("Action"):
-            pass  # TODO Exec Action
+            if info.type == "Action/Player/Join":
+                members[info.playerName] = info
         else:
             pass
     except json.decoder.JSONDecodeError:
@@ -96,6 +98,8 @@ async def init(websocket, path):
         await websocket.send(info.to_json() + "\n")
     for info in FIELDS.values():
         await websocket.send(info.to_json() + "\n")
+    for info in members.values():
+        await websocket.send(info.to_json() + "\n")
 
 
 async def broadcast(message, name):
@@ -113,15 +117,18 @@ async def handler(websocket, path):
 
     async def _close():
         print(f"Connection Closed: {path}")
-        target = f"Player/{name}"
         msg = json.dumps(
             {
-                "type": "Action/Delete/Object",
-                "target": target,
+                "type": "Action/Player/Leave",
+                "playerName": name,
             }
         )
-        if target in OBJECTS:
-            del OBJECTS[target]
+        del_objects = []
+        for obj_path in OBJECTS:
+            if obj_path.startswith(name):
+                del_objects.append(obj_path)
+        for obj_path in del_objects:
+            del OBJECTS[obj_path]
         await broadcast(msg, name)
 
     try:
@@ -135,9 +142,12 @@ async def handler(websocket, path):
                 await broadcast(message, name)
                 print("#", flush=True, end="")
     except websockets.ConnectionClosed:
+        print(datetime.datetime.now())
         await _close()
     finally:
         del players[name]
+        if name in members:
+            del members[name]
 
 
 async def main():
