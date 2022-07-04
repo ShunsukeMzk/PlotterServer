@@ -7,8 +7,8 @@ import sys
 import click
 import websockets
 
-HOST = os.getenv("HOST", "localhost")
-PORT = os.getenv("PORT", "8080")
+PLT_HOST = os.getenv("PLT_HOST", "localhost")
+PLT_PORT = os.getenv("PLT_PORT", "8080")
 
 
 def interrupt(async_func):
@@ -27,11 +27,17 @@ def cli():
 
 @cli.command()
 def server():
+    reconnect_time = 10
+
     players = {}  # name: websocket
     disconnected = {}  # name: task
 
-    async def _get_master():
+    async def _get_master(name):
         for p in players.copy():
+            if p == name:
+                continue
+            if p.startswith("_"):
+                continue
             while p in disconnected:
                 await asyncio.sleep(0.1)
             if p in players:
@@ -49,6 +55,8 @@ def server():
         for p in players.copy():
             if p == name:
                 continue
+            if p == "_sender":
+                continue
             await _send(p, message)
 
     async def _task(name):
@@ -57,17 +65,20 @@ def server():
             try:
                 message = json.loads(message)
                 click.echo("#", err=True, nl=False)
-                await _broadcast(message, websocket)
+                await _broadcast(name, message)
             except json.decoder.JSONDecodeError:
                 click.echo(f"Invalid JSON message: {message}", err=True)
 
-    async def _join(name, websocket):
+    async def _join(name):
         click.echo(f"Join: {name}", err=True)
-        players[name] = websocket
 
-        master = await _get_master()
+        master = await _get_master(name)
         if master:
-            await _send(master, {"type": "Action/Dump/All"})
+            await _send(name, {"type": "Action/Delete/All"})
+            await asyncio.sleep(2)
+            await _send(master, {"type": "Action/Dump"})
+        else:
+            click.echo(f"Master Client: {name}", err=True)
 
     async def _leave(name):
         click.echo(f"Leave: {name}", err=True)
@@ -88,7 +99,7 @@ def server():
             disconnected[name].cancel()
 
         async def __dc():
-            await asyncio.sleep(3)
+            await asyncio.sleep(reconnect_time)
             del disconnected[name]
             await _leave(name)
 
@@ -97,16 +108,18 @@ def server():
 
     async def _connect(websocket, path):
         name = path.split("/")[1]
+        reconnect = name in players
+        players[name] = websocket
         click.echo(f"Connect: {name}", err=True)
 
         if name in disconnected:
             disconnected[name].cancel()
             del disconnected[name]
 
-        if name not in players:
-            await _join(name, websocket)
+        if not reconnect:
+            await _join(name)
 
-        task = asyncio.create_task(_task(websocket))
+        task = asyncio.create_task(_task(name))
         try:
             await websocket.wait_closed()
         finally:
@@ -117,7 +130,7 @@ def server():
         loop = asyncio.get_running_loop()
         stop = loop.create_future()
         loop.add_signal_handler(signal.SIGTERM, stop.set_result, None)
-        async with websockets.serve(_connect, "0.0.0.0", int(PORT)):
+        async with websockets.serve(_connect, "0.0.0.0", int(PLT_PORT)):
             await stop
 
     asyncio.run(_serve())
@@ -125,7 +138,7 @@ def server():
 
 @cli.command()
 def observer():
-    uri = f"ws://{HOST}:{PORT}/_observer"
+    uri = f"ws://{PLT_HOST}:{PLT_PORT}/_observer"
 
     @interrupt
     async def _observe():
@@ -143,17 +156,23 @@ def observer():
 
 @cli.command()
 def sender():
-    uri = f"ws://{HOST}:{PORT}/_sender"
+    uri = f"ws://{PLT_HOST}:{PLT_PORT}/_sender"
 
     @interrupt
     async def _send():
+        last_message = ""
         async for websocket in websockets.connect(uri):
             click.echo(f"Connected", err=True)
             try:
+                if last_message:
+                    await websocket.send(last_message)
+                    last_message = ""
                 for line in sys.stdin:
                     if not line:
                         continue
+                    last_message = line
                     await websocket.send(line)
+                    last_message = ""
                 click.echo(f"Send Complete", err=True)
                 return
             except websockets.ConnectionClosed:
