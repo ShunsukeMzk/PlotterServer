@@ -2,16 +2,15 @@ version: '3'
 
 services:
 
-  server:
-    container_name: plotter
+  plt:
+    container_name: plt
     build: .
     ports:
       - 8080:8080
-#    network_mode: host
     environment:
-      - PORT=8080
-    working_dir:
-      /PlotterServer
+      - PLT_HOST=localhost
+      - PLT_PORT=8080
     volumes:
-      - ./:/PlotterServer
+      - ./:/plt
+    working_dir: /plt
     command: tail -f /dev/null
