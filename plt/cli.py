@@ -130,7 +130,7 @@ def server():
         loop = asyncio.get_running_loop()
         stop = loop.create_future()
         loop.add_signal_handler(signal.SIGTERM, stop.set_result, None)
-        async with websockets.serve(_connect, "0.0.0.0", int(PLT_PORT)):
+        async with websockets.serve(_connect, "0.0.0.0", int(PLT_PORT), ping_timeout=None):
             await stop
 
     asyncio.run(_serve())
@@ -142,7 +142,7 @@ def observer():
 
     @interrupt
     async def _observe():
-        async for websocket in websockets.connect(uri):
+        async for websocket in websockets.connect(uri, ping_timeout=None):
             click.echo(f"Connected", err=True)
             try:
                 while True:
@@ -161,8 +161,9 @@ def sender():
     @interrupt
     async def _send():
         last_message = ""
-        async for websocket in websockets.connect(uri):
+        async for websocket in websockets.connect(uri, ping_timeout=None):
             click.echo(f"Connected", err=True)
+            await asyncio.sleep(0.05)
             try:
                 if last_message:
                     await websocket.send(last_message)
