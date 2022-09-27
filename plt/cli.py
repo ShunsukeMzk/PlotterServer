@@ -200,7 +200,8 @@ def sender(file):
                 if last_message:
                     await websocket.send(last_message)
                     last_message = ""
-                for line in file:
+                while True:
+                    line = file.readline()
                     if not line:
                         continue
                     last_message = line

@@ -1,5 +1,17 @@
+import os
+from datetime import datetime
+from pathlib import Path
 
-import requests
+f = Path("_sample.txt")
+print(f.stat())
 
-response = requests.get("http://192.168.1.17:5000/kabusapi/ranking?type=2")
-print(response.text)
+
+
+def d(t):
+    return datetime.fromtimestamp(t)
+
+stat = os.stat("_sample.txt")
+
+print(d(stat.st_ctime))
+print(d(stat.st_atime))
+print(d(stat.st_mtime))
