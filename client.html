@@ -250,7 +250,7 @@ label {
         messages.append(msg);
 
         var msgBox = messages.get(0);
-        while (msgBox.childNodes.length > 1000) {
+        while (msgBox.childNodes.length > 10000) {
             msgBox.removeChild(msgBox.firstChild);
         }
         msgBox.scrollTop = msgBox.scrollHeight;
